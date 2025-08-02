@@ -1,0 +1,167 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "triggers": {
+            "When_events_are_available_in_Event_Hub": {
+                "recurrence": {
+                    "interval": 1,
+                    "frequency": "Minute"
+                },
+                "evaluatedRecurrence": {
+                    "interval": 1,
+                    "frequency": "Minute"
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['eventhubs']['connectionId']"
+                        }
+                    },
+                    "method": "get",
+                    "path": "/@{encodeURIComponent('taxi-trips')}/events/batch/head",
+                    "queries": {
+                        "contentType": "application/json",
+                        "consumerGroupName": "$Default",
+                        "maximumEventsCount": 10
+                    }
+                }
+            }
+        },
+        "actions": {
+            "cst8917-lab4-analyze_trip": {
+                "runAfter": {},
+                "type": "Function",
+                "inputs": {
+                    "body": "@triggerBody()",
+                    "method": "POST",
+                    "function": {
+                        "id": "/subscriptions/913a8401-361d-4f42-8d7d-e2ff44f75da2/resourceGroups/lab4-rg/providers/Microsoft.Web/sites/lab4-function-app/functions/analyze_trip"
+                    }
+                }
+            },
+            "For_each": {
+                "foreach": "@body('cst8917-lab4-analyze_trip')",
+                "actions": {
+                    "Condition": {
+                        "actions": {
+                            "Condition_1": {
+                                "actions": {
+                                    "Post_cards_for_sus": {
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['teams']['connectionId']"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "body": {
+                                                "recipient": "zhan0915@algonquinlive.com",
+                                                "messageBody": "{\n  \"type\": \"AdaptiveCard\",\n  \"body\": [\n    {\"type\": \"TextBlock\", \"text\": \"⚠️ Suspicious Vendor Activity Detected\", \"weight\": \"Bolder\", \"size\": \"Large\", \"color\": \"Attention\"},\n    {\"type\": \"FactSet\", \"facts\": [\n      {\"title\": \"Vendor\", \"value\": \"@{items('For_each')?['vendorID']}\"},\n      {\"title\": \"Distance (mi)\", \"value\": \"@{items('For_each')?['tripDistance']}\"},\n      {\"title\": \"Passengers\", \"value\": \"@{items('For_each')?['passengerCount']}\"},\n      {\"title\": \"Payment\", \"value\": \"@{items('For_each')?['paymentType']}\"},\n      {\"title\": \"Insights\", \"value\": \"@{join(items('For_each')?['insights'], ', ')}\"}\n    ]}\n  ],\n  \"actions\": [],\n  \"version\": \"1.2\"\n}"
+                                            },
+                                            "path": "/v1.0/teams/conversation/adaptivecard/poster/Flow bot/location/@{encodeURIComponent('Chat with Flow bot')}"
+                                        }
+                                    }
+                                },
+                                "else": {
+                                    "actions": {
+                                        "Post_cards_for_interesting": {
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['teams']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "body": {
+                                                    "recipient": "zhan0915@algonquinlive.com",
+                                                    "messageBody": "{\n  \"type\": \"AdaptiveCard\",\n  \"body\": [\n    {\"type\": \"TextBlock\", \"text\": \"🚨 Interesting Trip Detected\", \"weight\": \"Bolder\", \"size\": \"Large\", \"color\": \"Attention\"},\n    {\"type\": \"FactSet\", \"facts\": [\n      {\"title\": \"Vendor\", \"value\": \"@{items('For_each')?['vendorID']}\"},\n      {\"title\": \"Distance (mi)\", \"value\": \"@{items('For_each')?['tripDistance']}\"},\n      {\"title\": \"Passengers\", \"value\": \"@{items('For_each')?['passengerCount']}\"},\n      {\"title\": \"Payment\", \"value\": \"@{items('For_each')?['paymentType']}\"},\n      {\"title\": \"Insights\", \"value\": \"@{join(items('For_each')?['insights'], ', ')}\"}\n    ]}\n  ],\n  \"actions\": [],\n  \"version\": \"1.2\"\n}"
+                                                },
+                                                "path": "/v1.0/teams/conversation/adaptivecard/poster/Flow bot/location/@{encodeURIComponent('Chat with Flow bot')}"
+                                            }
+                                        }
+                                    }
+                                },
+                                "expression": {
+                                    "and": [
+                                        {
+                                            "equals": [
+                                                "@contains(items('For_each')?['insights'], 'SuspiciousVendorActivity')",
+                                                true
+                                            ]
+                                        }
+                                    ]
+                                },
+                                "type": "If"
+                            }
+                        },
+                        "else": {
+                            "actions": {
+                                "Post_card_for_no_instesting": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['teams']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "body": {
+                                            "recipient": "zhan0915@algonquinlive.com",
+                                            "messageBody": "{\n  \"type\": \"AdaptiveCard\",\n  \"body\": [\n    {\"type\": \"TextBlock\", \"text\": \"✅ Trip Analyzed - No Issues\", \"weight\": \"Bolder\", \"size\": \"Large\", \"color\": \"Good\"},\n    {\"type\": \"FactSet\", \"facts\": [\n      {\"title\": \"Vendor\", \"value\": \"@{items('For_each')?['vendorID']}\"},\n      {\"title\": \"Distance (mi)\", \"value\": \"@{items('For_each')?['tripDistance']}\"},\n      {\"title\": \"Passengers\", \"value\": \"@{items('For_each')?['passengerCount']}\"},\n      {\"title\": \"Payment\", \"value\": \"@{items('For_each')?['paymentType']}\"},\n      {\"title\": \"Summary\", \"value\": \"@{items('For_each')?['summary']}\"}\n    ]}\n  ],\n  \"actions\": [],\n  \"version\": \"1.2\"\n}"
+                                        },
+                                        "path": "/v1.0/teams/conversation/adaptivecard/poster/Flow bot/location/@{encodeURIComponent('Chat with Flow bot')}"
+                                    }
+                                }
+                            }
+                        },
+                        "expression": {
+                            "and": [
+                                {
+                                    "equals": [
+                                        "@items('For_each')?['isInteresting']",
+                                        true
+                                    ]
+                                }
+                            ]
+                        },
+                        "type": "If"
+                    }
+                },
+                "runAfter": {
+                    "cst8917-lab4-analyze_trip": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Foreach"
+            }
+        },
+        "outputs": {},
+        "parameters": {
+            "$connections": {
+                "type": "Object",
+                "defaultValue": {}
+            }
+        }
+    },
+    "parameters": {
+        "$connections": {
+            "type": "Object",
+            "value": {
+                "eventhubs": {
+                    "id": "/subscriptions/913a8401-361d-4f42-8d7d-e2ff44f75da2/providers/Microsoft.Web/locations/canadacentral/managedApis/eventhubs",
+                    "connectionId": "/subscriptions/913a8401-361d-4f42-8d7d-e2ff44f75da2/resourceGroups/lab4-rg/providers/Microsoft.Web/connections/eventhubs",
+                    "connectionName": "eventhubs"
+                },
+                "teams": {
+                    "id": "/subscriptions/913a8401-361d-4f42-8d7d-e2ff44f75da2/providers/Microsoft.Web/locations/canadacentral/managedApis/teams",
+                    "connectionId": "/subscriptions/913a8401-361d-4f42-8d7d-e2ff44f75da2/resourceGroups/lab4-rg/providers/Microsoft.Web/connections/teams",
+                    "connectionName": "teams"
+                }
+            }
+        }
+    }
+}
